@@ -1,0 +1,34 @@
+# Dependencies and generated frontend files
+node_modules/
+client/dist/
+dist/
+dist-ssr/
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+server/.env
+ml-service/.env
+
+# Python virtual environments and generated files
+venv/
+.venv/
+ml-service/venv/
+__pycache__/
+*.py[cod]
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Unused 400 MB model artifact; the current API calculates yield directly
+ml-service/models/yield_model.pkl
