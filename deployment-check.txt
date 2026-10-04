@@ -1,0 +1,1331 @@
+
+==================== server\.env.example ====================
+
+PORT=8080
+MONGO_URL=mongodb://127.0.0.1:27017/khetwise
+JWT_SECRET=replace-with-a-long-random-secret
+
+==================== server\package.json ====================
+
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.20.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "joi": "^18.2.8",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
+
+==================== server\app.js ====================
+
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+
+const app = express();
+
+app.use(express.json());
+app.use(cors());
+app.use(helmet());
+app.use(express.urlencoded({ extended: true }));
+
+const farmRoutes = require("./routes/farmRoutes");
+const soilRoutes = require("./routes/soilRoutes");
+const recommendationRoutes = require("./routes/recommendationRoutes");
+const weatherRoutes = require("./routes/weatherRoutes");
+const marketPrice = require("./routes/marketPrice");
+const cropsRoutes = require("./routes/cropsRoutes");
+const AlertsRoutes = require("./routes/AlertsRoutes");
+const userRoutes = require("./routes/userRoutes");
+const notFound = require("./middleware/notFound");
+const errorMiddleware = require("./middleware/errorMiddleware");
+const mlRoutes = require("./routes/mlRoutes");
+
+app.use("/api/farms", farmRoutes);
+app.use("/api/soil", soilRoutes);
+app.use("/api/recommendations", recommendationRoutes);
+app.use("/api/weather", weatherRoutes);
+app.use("/api/MarketPrice", marketPrice);
+app.use("/api/crops", cropsRoutes);
+app.use("/api/alerts", AlertsRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/ml", mlRoutes);
+
+app.get("/", (req, res) => {
+  res.send("KhetWise API is running");
+});
+
+// MUST BE LAST
+app.use(notFound);
+app.use(errorMiddleware);
+
+module.exports = app;
+
+==================== server\server.js ====================
+
+require("dotenv").config();
+
+const app = require("./app");
+const mongoose = require("mongoose");
+
+const PORT = process.env.PORT || 8080;
+const MONGO_URL = process.env.MONGO_URL;
+
+mongoose
+  .connect(MONGO_URL)
+  .then(() => {
+    console.log("Connected to MongoDB");
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Database connection failed:", err);
+  });
+
+==================== server\config\db.js ====================
+
+import mongoose from "mongoose";
+
+const connectDB = async () => {
+  try {
+    const connection = await mongoose.connect(process.env.MONGODB_URI);
+
+    console.log(`MongoDB connected: ${connection.connection.host}`);
+  } catch (error) {
+    console.error(`MongoDB connection error: ${error.message}`);
+    process.exit(1);
+  }
+};
+
+export default connectDB;
+
+==================== server\routes\mlRoutes.js ====================
+
+const express = require("express");
+
+const {
+  predictCrop,
+  predictFertilizer,
+  predictYield,
+  predictPrice,
+  predictDisease,
+  predictGrowth,
+} = require("../services/mlService");
+
+const router = express.Router();
+
+router.post("/crop", async (req, res) => {
+  try {
+    const result = await predictCrop(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Crop prediction error:", error.message);
+    res.status(500).json({ message: "Crop prediction failed" });
+  }
+});
+
+router.post("/fertilizer", async (req, res) => {
+  try {
+    const result = await predictFertilizer(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Fertilizer prediction error:", error.message);
+    res.status(500).json({ message: "Fertilizer prediction failed" });
+  }
+});
+
+router.post("/yield", async (req, res) => {
+  try {
+    const result = await predictYield(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Yield prediction error:", error.message);
+    res.status(500).json({ message: "Yield prediction failed" });
+  }
+});
+
+router.post("/price", async (req, res) => {
+  try {
+    const result = await predictPrice(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Price prediction error:", error.message);
+    res.status(500).json({ message: "Price prediction failed" });
+  }
+});
+
+router.post("/disease", async (req, res) => {
+  try {
+    const result = await predictDisease(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Disease prediction error:", error.message);
+    res.status(500).json({ message: "Disease prediction failed" });
+  }
+});
+
+router.post("/growth", async (req, res) => {
+  try {
+    const result = await predictGrowth(req.body);
+    res.json(result);
+  } catch (error) {
+    console.error("Growth prediction error:", error.message);
+    res.status(500).json({ message: "Growth prediction failed" });
+  }
+});
+
+module.exports = router;
+
+==================== server\services\mlService.js ====================
+
+const axios = require("axios");
+
+const ML_URL = "http://127.0.0.1:8000";
+
+async function predictCrop(data) {
+  const response = await axios.post(`${ML_URL}/predict/crop`, data);
+  return response.data;
+}
+
+async function predictFertilizer(data) {
+  const response = await axios.post(`${ML_URL}/predict/fertilizer`, data);
+  return response.data;
+}
+
+async function predictYield(data) {
+  const response = await axios.post(`${ML_URL}/predict/yield`, data);
+  return response.data;
+}
+
+async function predictPrice(data) {
+  const response = await axios.post(`${ML_URL}/predict/price`, data);
+  return response.data;
+}
+
+async function predictDisease(data) {
+  const response = await axios.post(`${ML_URL}/predict/disease`, data);
+  return response.data;
+}
+
+async function predictGrowth(data) {
+  const response = await axios.post(`${ML_URL}/predict/growth`, data);
+  return response.data;
+}
+
+module.exports = {
+  predictCrop,
+  predictFertilizer,
+  predictYield,
+  predictPrice,
+  predictDisease,
+  predictGrowth,
+};
+
+==================== ml-service\main.py ====================
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+import joblib
+import pandas as pd
+import os
+import math
+
+
+# =========================================================
+# KhetWise ML API
+# =========================================================
+
+app = FastAPI(
+    title="KhetWise ML API",
+    description="Machine Learning API for KhetWise Agriculture Platform",
+    version="1.0.0",
+)
+
+
+# =========================================================
+# CORS
+# =========================================================
+# Allows your React/Vite frontend to communicate with
+# FastAPI during local development.
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# =========================================================
+# PATHS
+# =========================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+
+
+# =========================================================
+# MODEL LOADER
+# =========================================================
+
+def load_model(filename: str):
+    """
+    Load a trained joblib model from the backend/models folder.
+    """
+
+    path = os.path.join(MODEL_DIR, filename)
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"Model file not found: {path}"
+        )
+
+    try:
+        model = joblib.load(path)
+
+        print(f"Loaded model: {filename}")
+
+        return model
+
+    except Exception as e:
+        raise RuntimeError(
+            f"Could not load model '{filename}': {str(e)}"
+        )
+
+
+# =========================================================
+# LOAD ALL MODELS
+# =========================================================
+
+crop_model = load_model(
+    "crop_recommendation_model.pkl"
+)
+
+fertilizer_model = load_model(
+    "fertilizer_compact_model.pkl"
+)
+
+price_model = load_model(
+    "price_compact_model.pkl"
+)
+
+disease_model = load_model(
+    "disease_compact_model.pkl"
+)
+
+growth_model = load_model(
+    "crop_growth_model_clean.pkl"
+)
+
+
+# =========================================================
+# MODEL FEATURE HELPER
+# =========================================================
+
+def get_model_features(model):
+    """
+    Get the exact feature names used while training the model.
+    """
+
+    if not hasattr(model, "feature_names_in_"):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "This trained model does not contain "
+                "'feature_names_in_'. The model must be retrained "
+                "using a pandas DataFrame with named columns, or "
+                "the backend must be configured with the training "
+                "feature names."
+            ),
+        )
+
+    return list(model.feature_names_in_)
+
+
+def get_model_input_types(model):
+    """Return categorical options and numeric feature names from a pipeline."""
+    categorical = {}
+    numeric = set()
+    preprocessor = getattr(model, "named_steps", {}).get("preprocessor")
+    if preprocessor is None:
+        return categorical, numeric
+
+    for name, transformer, columns in preprocessor.transformers_:
+        if name == "remainder" or transformer == "drop":
+            continue
+        if hasattr(transformer, "categories_"):
+            for column, values in zip(columns, transformer.categories_):
+                categorical[column] = {str(value) for value in values}
+        elif transformer != "passthrough":
+            numeric.update(columns)
+        else:
+            numeric.update(columns)
+    return categorical, numeric
+
+
+# =========================================================
+# INPUT PREPARATION
+# =========================================================
+
+def prepare_input(data: dict, model):
+    """
+    Prepare frontend JSON data for the trained ML model.
+
+    The frontend can send additional fields, but only the exact
+    fields used during model training are passed to the model.
+    """
+
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Request body must be a JSON object.",
+        )
+
+    required_features = get_model_features(model)
+    categorical_features, numeric_features = get_model_input_types(model)
+
+    # -----------------------------------------------------
+    # Check for missing fields
+    # -----------------------------------------------------
+
+    missing_features = []
+
+    for feature in required_features:
+
+        if feature not in data:
+            missing_features.append(feature)
+            continue
+
+        value = data[feature]
+
+        if value is None:
+            missing_features.append(feature)
+            continue
+
+        if isinstance(value, str) and value.strip() == "":
+            missing_features.append(feature)
+
+    if missing_features:
+
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Missing required features.",
+                "required_features": required_features,
+                "missing_features": missing_features,
+            },
+        )
+
+    # -----------------------------------------------------
+    # Keep exact training feature order
+    # -----------------------------------------------------
+
+    input_data = {}
+
+    for feature in required_features:
+
+        value = data[feature]
+
+        # Remove accidental whitespace from strings.
+        if isinstance(value, str):
+            value = value.strip()
+
+        if feature in categorical_features and str(value) not in categorical_features[feature]:
+            allowed = sorted(categorical_features[feature])
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported value for {feature}. Choose one of: {', '.join(allowed)}",
+            )
+
+        if feature in numeric_features:
+            if isinstance(value, bool):
+                raise HTTPException(status_code=422, detail=f"{feature} must be a number.")
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail=f"{feature} must be a number.")
+            if not math.isfinite(value):
+                raise HTTPException(status_code=422, detail=f"{feature} must be a finite number.")
+
+        input_data[feature] = value
+
+    # -----------------------------------------------------
+    # Create DataFrame
+    # -----------------------------------------------------
+
+    try:
+
+        df = pd.DataFrame(
+            [input_data],
+            columns=required_features,
+        )
+
+        # sklearn's numeric transformers require real numeric dtypes. Explicitly
+        # coerce here so mixed JSON/string inputs cannot leak object arrays into
+        # NumPy's NaN checks during inference.
+        for feature in numeric_features:
+            df[feature] = pd.to_numeric(df[feature], errors="coerce").astype("float64")
+            if df[feature].isna().any():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{feature} must be a valid finite number.",
+                )
+
+        for feature in categorical_features:
+            df[feature] = df[feature].astype(str).astype(object)
+
+    except Exception as e:
+
+        if isinstance(e, HTTPException):
+            raise
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not prepare model input: {str(e)}",
+        )
+
+    return df
+
+
+# =========================================================
+# SAFE NUMBER CONVERSION
+# =========================================================
+
+def safe_float(value):
+    """
+    Convert numpy/Python numeric values into JSON-safe float.
+    """
+
+    try:
+
+        number = float(value)
+
+        if not math.isfinite(number):
+            raise ValueError("Prediction is not a finite number.")
+
+        return number
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Model returned an invalid numeric prediction: {str(e)}",
+        )
+
+
+# =========================================================
+# HOME / HEALTH CHECK
+# =========================================================
+
+@app.get("/")
+def home():
+
+    return {
+        "message": "KhetWise ML API is running!",
+        "status": "success",
+        "version": "1.0.0",
+        "models": [
+            "crop",
+            "fertilizer",
+            "yield",
+            "price",
+            "disease",
+            "growth",
+        ],
+    }
+
+
+# =========================================================
+# HEALTH CHECK
+# =========================================================
+
+@app.get("/health")
+def health():
+
+    return {
+        "status": "healthy",
+        "message": "KhetWise ML API is ready.",
+    }
+
+
+# =========================================================
+# MODEL FEATURES
+# =========================================================
+#
+# IMPORTANT:
+# This endpoint is used by the React frontend to automatically
+# discover the exact features expected by each trained model.
+#
+# There must be ONLY ONE /model-features endpoint.
+# =========================================================
+
+@app.get("/model-features")
+def model_features():
+
+    try:
+
+        return {
+            "crop": get_model_features(crop_model),
+            "fertilizer": get_model_features(fertilizer_model),
+            "yield": ["Production", "Area"],
+            "price": get_model_features(price_model),
+            "disease": get_model_features(disease_model),
+            "growth": get_model_features(growth_model),
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not read model features: {str(e)}",
+        )
+
+
+# =========================================================
+# 1. CROP RECOMMENDATION
+# =========================================================
+
+@app.post("/predict/crop")
+def predict_crop(data: dict):
+
+    try:
+
+        df = prepare_input(
+            data,
+            crop_model,
+        )
+
+        prediction = crop_model.predict(df)[0]
+        probabilities = crop_model.predict_proba(df)[0]
+        classes = crop_model.classes_
+        recommendations = sorted(
+            [
+                {"crop": str(label), "score": safe_float(score)}
+                for label, score in zip(classes, probabilities)
+            ],
+            key=lambda item: item["score"],
+            reverse=True,
+        )[:3]
+
+        return {
+            "success": True,
+            "model": "crop",
+            "recommended_crop": str(prediction),
+            "recommendations": recommendations,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Crop prediction error: {str(e)}",
+        )
+
+
+# =========================================================
+# 2. FERTILIZER RECOMMENDATION
+# =========================================================
+
+@app.post("/predict/fertilizer")
+def predict_fertilizer(data: dict):
+
+    try:
+
+        df = prepare_input(
+            data,
+            fertilizer_model,
+        )
+
+        prediction = fertilizer_model.predict(df)[0]
+        probabilities = fertilizer_model.predict_proba(df)[0]
+        recommendations = sorted(
+            [
+                {"fertilizer": str(label), "score": safe_float(score)}
+                for label, score in zip(fertilizer_model.classes_, probabilities)
+            ],
+            key=lambda item: item["score"],
+            reverse=True,
+        )[:3]
+
+        return {
+            "success": True,
+            "model": "fertilizer",
+            "recommended_fertilizer": str(prediction),
+            "recommendations": recommendations,
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fertilizer prediction error: {str(e)}",
+        )
+
+
+# =========================================================
+# 3. CROP YIELD PREDICTION
+# =========================================================
+
+@app.post("/predict/yield")
+def predict_yield(data: dict):
+
+    try:
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="Request body must be a JSON object.")
+        try:
+            production = float(data.get("Production"))
+            area = float(data.get("Area"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="Enter numeric production and cultivated area values.")
+        if not math.isfinite(production) or production < 0:
+            raise HTTPException(status_code=422, detail="Production must be a finite, non-negative number.")
+        if not math.isfinite(area) or area <= 0:
+            raise HTTPException(status_code=422, detail="Cultivated area must be greater than zero.")
+        prediction = production / area
+
+        return {
+            "success": True,
+            "model": "yield",
+            "estimated_yield": safe_float(prediction),
+            "unit": "source-data units per hectare",
+            "method": "production divided by cultivated area",
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Yield prediction error: {str(e)}",
+        )
+
+
+# =========================================================
+# 4. MARKET PRICE PREDICTION
+# =========================================================
+
+@app.post("/predict/price")
+def predict_price(data: dict):
+
+    try:
+
+        df = prepare_input(
+            data,
+            price_model,
+        )
+
+        prediction = price_model.predict(df)[0]
+
+        return {
+            "success": True,
+            "model": "price",
+            "predicted_price": safe_float(prediction),
+            "currency": "INR per quintal",
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Price prediction error: {str(e)}",
+        )
+
+
+# =========================================================
+# 5. PLANT DISEASE PREDICTION
+# =========================================================
+
+@app.post("/predict/disease")
+def predict_disease(data: dict):
+
+    try:
+
+        df = prepare_input(
+            data,
+            disease_model,
+        )
+
+        prediction = disease_model.predict(df)[0]
+        probabilities = disease_model.predict_proba(df)[0]
+        confidence = safe_float(max(probabilities))
+
+        return {
+            "success": True,
+            "model": "disease",
+            "disease_present": str(prediction),
+            "model_score": confidence,
+            "notice": "Prototype symptom screen trained on synthetic data; not a diagnosis.",
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Disease prediction error: {str(e)}",
+        )
+
+
+# =========================================================
+# 6. CROP GROWTH PREDICTION
+# =========================================================
+
+@app.post("/predict/growth")
+def predict_growth(data: dict):
+
+    try:
+
+        df = prepare_input(
+            data,
+            growth_model,
+        )
+
+        prediction = growth_model.predict(df)[0]
+        probabilities = growth_model.predict_proba(df)[0]
+
+        return {
+            "success": True,
+            "model": "growth",
+            "growth_result": int(prediction),
+            "growth_category": f"Growth category {int(prediction)}",
+            "model_score": safe_float(max(probabilities)),
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Growth prediction error: {str(e)}",
+        )
+
+
+# =========================================================
+# STARTUP INFORMATION
+# =========================================================
+
+@app.on_event("startup")
+def startup_event():
+
+    print("\n")
+    print("=" * 60)
+    print("🌱 KHETWISE ML API")
+    print("=" * 60)
+    print(f"📁 Model directory: {MODEL_DIR}")
+    print("✅ Crop model loaded")
+    print("✅ Fertilizer model loaded")
+    print("✅ Yield per area calculation ready")
+    print("✅ Price model loaded")
+    print("✅ Disease model loaded")
+    print("✅ Growth model loaded")
+    print("=" * 60)
+    print("🚀 API ready")
+    print("=" * 60)
+    print("\n")
+
+==================== ml-service\requirements.txt ====================
+
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+pandas==3.0.6
+scikit-learn==1.8.0
+joblib==1.6.0
+numpy==2.5.3
+
+==================== client\package.json ====================
+
+{
+  "name": "client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.8.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "axios": "^1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.4.0",
+    "framer-motion": "^13.4.1",
+    "lucide-react": "^1.48.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4",
+    "shadcn": "^4.21.0",
+    "tailwindcss": "^4.3.3",
+    "three": "^0.186.1",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
+    "vite": "^8.3.0"
+  }
+}
+
+==================== client\vite.config.js ====================
+
+import path from "path";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+});
+
+==================== client\src\services\mlApi.js ====================
+
+const API_BASE_URL = "http://127.0.0.1:8000";
+
+async function apiRequest(endpoint, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  const text = await response.text();
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(text || `Server returned HTTP ${response.status}`);
+  }
+
+  if (!response.ok) {
+    const detail = data.detail || data.message;
+    throw new Error(
+      typeof detail === "string"
+        ? detail
+        : detail?.message || JSON.stringify(detail) || "API request failed",
+    );
+  }
+
+  return data;
+}
+
+/* =========================
+   CROP
+========================= */
+
+export async function predictCrop(data) {
+  return apiRequest("/predict/crop", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/* =========================
+   FERTILIZER
+========================= */
+
+export async function predictFertilizer(data) {
+  return apiRequest("/predict/fertilizer", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/* =========================
+   YIELD
+========================= */
+
+export async function predictYield(data) {
+  return apiRequest("/predict/yield", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/* =========================
+   PRICE
+========================= */
+
+export async function predictPrice(data) {
+  return apiRequest("/predict/price", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/* =========================
+   DISEASE
+========================= */
+
+export async function predictDisease(data) {
+  return apiRequest("/predict/disease", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+/* =========================
+   GROWTH
+========================= */
+
+export async function predictGrowth(data) {
+  return apiRequest("/predict/growth", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+==================== client\src\services\farmWeather.js ====================
+
+const FORECAST_CACHE_KEY = "khetwise_forecast_cache";
+const CACHE_DURATION_MS = 10 * 60 * 1000;
+
+const SOIL_GUIDES = [
+  { matches: ["punjab", "haryana", "uttar pradesh", "bihar", "west bengal"], soil: "Alluvial soils", detail: "Typically deep and productive in the plains. Drainage, pH, and nutrient levels still vary by field.", crops: "Rice, wheat, sugarcane, pulses, and vegetables" },
+  { matches: ["maharashtra", "madhya pradesh", "gujarat", "telangana"], soil: "Black (regur) soils are common in parts of the region", detail: "Clay-rich soils can hold water and shrink as they dry. Field drainage and soil testing matter.", crops: "Cotton, soybean, sorghum, pulses, and sugarcane" },
+  { matches: ["rajasthan"], soil: "Arid and sandy soils are common", detail: "Low and variable rainfall makes water conservation and organic matter especially important.", crops: "Pearl millet, pulses, guar, and drought-tolerant crops" },
+  { matches: ["odisha", "chhattisgarh", "jharkhand", "tamil nadu"], soil: "Red and yellow soils are common in many areas", detail: "These soils can be relatively low in nutrients; local pH and nutrient tests guide amendments.", crops: "Millets, pulses, groundnut, and regionally adapted rice" },
+  { matches: ["kerala", "goa", "meghalaya", "mizoram", "nagaland", "manipur", "tripura", "arunachal pradesh", "sikkim"], soil: "Lateritic or acidic hill soils occur in many areas", detail: "Soil properties change sharply with elevation and landform. Check pH and erosion risk before amendments.", crops: "Tea, spices, cashew, rice, and locally adapted horticulture" },
+  { matches: ["himachal pradesh", "uttarakhand", "jammu", "kashmir", "ladakh"], soil: "Mountain and valley soils vary by slope and elevation", detail: "Drainage, soil depth, and erosion control are key; a state-level soil label is not precise enough for a field prescription.", crops: "Temperate fruits, pulses, maize, and locally adapted terrace crops" },
+  { matches: ["assam"], soil: "Alluvial soils in river plains; acidic hill soils in uplands", detail: "The right soil description depends on whether the farm is in the valley or hills.", crops: "Rice, tea, pulses, and locally adapted horticulture" },
+  { matches: ["karnataka", "andhra pradesh"], soil: "Red soils and black soils both occur across the state", detail: "Soil type can differ between nearby districts; use a soil test for field-level decisions.", crops: "Millets, pulses, groundnut, cotton, and regionally adapted crops" },
+];
+
+function readTemperatureUnit() {
+  try {
+    return JSON.parse(localStorage.getItem("khetwise_settings") || "{}").temperatureUnit === "F" ? "fahrenheit" : "celsius";
+  } catch {
+    return "celsius";
+  }
+}
+
+async function requestJson(url, signal) {
+  const response = await fetch(url, { signal });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) throw new Error(data.reason || `Weather service returned ${response.status}.`);
+  return data;
+}
+
+async function geocodeFarm(location, signal) {
+  const search = async (countryCode) => {
+    const params = new URLSearchParams({ name: location, count: "1", language: "en" });
+    if (countryCode) params.set("countryCode", countryCode);
+    const data = await requestJson(`https://geocoding-api.open-meteo.com/v1/search?${params}`, signal);
+    return data.results?.[0];
+  };
+
+  return (await search("IN")) || (await search(""));
+}
+
+function makeSoilGuide(place) {
+  const region = `${place.admin1 || ""} ${place.admin2 || ""}`.toLowerCase();
+  const guide = SOIL_GUIDES.find((item) => item.matches.some((name) => region.includes(name)));
+  if (!guide) {
+    return {
+      soil: "Field soil testing recommended",
+      detail: "We could not match this location to a regional soil guide. A soil test is needed before choosing amendments or crops.",
+      crops: "Use local agricultural extension guidance for crop selection.",
+      region: [place.admin2, place.admin1, place.country].filter(Boolean).join(", "),
+    };
+  }
+  return { ...guide, region: [place.admin2, place.admin1, place.country].filter(Boolean).join(", ") };
+}
+
+export function describeWeatherCode(code) {
+  if (code === 0) return "Clear sky";
+  if (code === 1) return "Mainly clear";
+  if (code === 2) return "Partly cloudy";
+  if (code === 3) return "Overcast";
+  if ([45, 48].includes(code)) return "Foggy";
+  if ([51, 53, 55, 56, 57].includes(code)) return "Drizzle";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "Rain showers";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "Snow";
+  if ([95, 96, 99].includes(code)) return "Thunderstorm";
+  return "Weather conditions";
+}
+
+function cacheMatches(cache, location, unit) {
+  return cache?.location?.toLowerCase() === location.toLowerCase() && cache?.unit === unit && Date.now() - cache.savedAt < CACHE_DURATION_MS;
+}
+
+export async function getFarmForecast(location, { signal, forceRefresh = false } = {}) {
+  if (!location?.trim()) throw new Error("Add a farm location to see its forecast.");
+  const unit = readTemperatureUnit();
+  try {
+    const cached = JSON.parse(localStorage.getItem(FORECAST_CACHE_KEY) || "null");
+    if (!forceRefresh && cacheMatches(cached, location.trim(), unit)) return cached.data;
+  } catch {
+    // Ignore invalid cache and fetch a fresh forecast.
+  }
+
+  const place = await geocodeFarm(location.trim(), signal);
+  if (!place) throw new Error("We couldn’t find that farm location. Add a nearby town or district to the farm address.");
+  const params = new URLSearchParams({
+    latitude: String(place.latitude),
+    longitude: String(place.longitude),
+    current: "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
+    forecast_days: "7",
+    timezone: "auto",
+    temperature_unit: unit,
+    wind_speed_unit: "kmh",
+    precipitation_unit: "mm",
+  });
+  const forecast = await requestJson(`https://api.open-meteo.com/v1/forecast?${params}`, signal);
+  if (!forecast.current || !forecast.daily) throw new Error("Weather data is not available for this location right now.");
+
+  const data = {
+    location: [place.name, place.admin1, place.country].filter(Boolean).join(", "),
+    admin1: place.admin1 || "",
+    latitude: place.latitude,
+    longitude: place.longitude,
+    timezone: forecast.timezone || place.timezone,
+    unit: unit === "fahrenheit" ? "°F" : "°C",
+    current: { ...forecast.current, description: describeWeatherCode(forecast.current.weather_code) },
+    daily: forecast.daily.time.map((date, index) => ({
+      date,
+      code: forecast.daily.weather_code[index],
+      description: describeWeatherCode(forecast.daily.weather_code[index]),
+      high: forecast.daily.temperature_2m_max[index],
+      low: forecast.daily.temperature_2m_min[index],
+      precipitationProbability: forecast.daily.precipitation_probability_max[index],
+      precipitation: forecast.daily.precipitation_sum[index],
+    })),
+    updatedAt: new Date().toISOString(),
+    soilGuide: makeSoilGuide(place),
+  };
+  localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify({ location: location.trim(), unit, savedAt: Date.now(), data }));
+  return data;
+}
+
+==================== client\src\services\farmerAssistant.js ====================
+
+const KNOWLEDGE_SOURCES = {
+  soil: { label: "ICAR soil health guidance", url: "https://www.icar.gov.in/en/icar-mgifri-motihari-and-atma-strengthen-farmer-awareness-soil-health-rice-nursery-management-and" },
+  pest: { label: "ICAR integrated pest management", url: "https://www.icar.gov.in/en/integrated-pest-management-sustainable-approach-responsible-pest-management" },
+  weather: { label: "ICAR farmer advisories", url: "https://icar.gov.in/en/kharif-agro-advisory-farmers" },
+  kvk: { label: "Find an ICAR Krishi Vigyan Kendra", url: "https://www.icar.gov.in/en/krishi-vigyan-kendras-kvks" },
+};
+
+const ANSWERS = {
+  en: {
+    yellow: {
+      title: "Yellowing leaves need a quick field check",
+      body: "Yellow leaves can come from several causes, including nutrient stress, waterlogging, drought, root damage or disease. The leaf pattern and crop stage help separate them.",
+      steps: ["Check whether yellowing starts on older or newer leaves and whether it is uniform or patchy.", "Check soil moisture near the roots and look for standing water, damaged roots or visible pests on both sides of leaves.", "Use a soil test before adding fertilizer; avoid a blanket nitrogen dose until the cause is clearer."],
+      source: "soil", action: { label: "Open fertilizer guidance", path: "/dashboard/fertilizer" },
+    },
+    pest: {
+      title: "Start with pest identification and field monitoring",
+      body: "Pest control depends on the crop, pest species, crop stage and how widely damage has spread. A symptom alone is not enough to choose a spray.",
+      steps: ["Inspect several affected and healthy plants; check leaf undersides, stems and growing points.", "Note the crop, growth stage, affected area and whether live insects or eggs are present. A clear photo can help an expert identify them.", "Use non-chemical and biological controls where suitable. Ask your local KVK for a crop-specific recommendation before using a pesticide; follow its label and safety directions."],
+      source: "pest", action: { label: "Check plant symptoms", path: "/dashboard/disease" },
+    },
+    disease: {
+      title: "Let’s narrow down the crop problem",
+      body: "Leaf spots, wilting and rot can have different causes, and this assistant cannot diagnose a disease from text alone.",
+      steps: ["Record the crop and growth stage, when symptoms began, and whether they are spreading.", "Check affected and healthy plants, leaf undersides, stems and roots. Note recent rain, irrigation and any recent spray.", "Avoid applying a fungicide or mixing products until the problem is identified. Share clear photos with a local agricultural expert or KVK."],
+      source: "kvk", action: { label: "Open symptom screening", path: "/dashboard/disease" },
+    },
+    water: {
+      title: "Check root-zone moisture before changing irrigation",
+      body: "Water needs depend on crop, growth stage, soil texture, recent rain and the forecast for your farm.",
+      steps: ["Check moisture a few centimetres below the surface near the active roots; a dry surface alone may not mean the root zone is dry.", "Look for both signs of water stress and waterlogging. Improve drainage if water is standing around roots.", "Use the local forecast and crop stage to plan the next irrigation; avoid a fixed schedule that ignores rain and soil conditions."],
+      source: "weather", action: { label: "View farm weather", path: "/dashboard/weather" },
+    },
+    fertilizer: {
+      title: "Base fertilizer choices on your soil test",
+      body: "A suitable nutrient plan depends on the crop, soil test, yield target, crop stage and nutrients already applied.",
+      steps: ["Use a recent soil-health or laboratory report for pH and available nutrients.", "Follow crop- and region-specific recommendations from the soil report or local agriculture department.", "Avoid applying a blanket dose based only on leaf colour; excess or poorly timed fertilizer can waste money and harm soil and water."],
+      source: "soil", action: { label: "Open fertilizer model", path: "/dashboard/fertilizer" },
+    },
+    weather: {
+      title: "Use the farm forecast to plan field work",
+      body: "The dashboard forecast is for the nearest weather grid point, so conditions can differ within your farm.",
+      steps: ["Check the forecast date, rain chance and expected rainfall before irrigation or field operations.", "Compare forecast conditions with what you observe in the field, especially after local showers.", "Tell me your crop and the decision you need to make—such as irrigation, sowing or spraying—for more focused guidance."],
+      source: "weather", action: { label: "Open 7-day farm forecast", path: "/dashboard/weather" },
+    },
+    crop: {
+      title: "Choose crops using soil and season information",
+      body: "Crop suitability depends on your district, sowing season, soil, water availability and local market access.",
+      steps: ["Use a soil test and a local seasonal crop calendar where available.", "Consider water availability and the forecast alongside the crop’s growth duration.", "KhetWise can rank crops from the model inputs; confirm the result with a local extension expert before planting."],
+      source: "weather", action: { label: "Open crop recommendation", path: "/dashboard/crop" },
+    },
+    price: {
+      title: "Compare market information before deciding when to sell",
+      body: "Prices vary by market, grade, arrival volume, date and transport cost. A model estimate is not a guaranteed sale price.",
+      steps: ["Check recent prices from nearby mandis for the same crop and grade.", "Compare transport, storage and commission costs with the quoted price.", "Use the KhetWise estimate as one input alongside current market quotes."],
+      source: "kvk", action: { label: "Open market model", path: "/dashboard/price" },
+    },
+    general: {
+      title: "I can help narrow down a common farm issue",
+      body: "Add a few details so the guidance fits your field instead of giving a generic guess.",
+      steps: ["Crop and variety, if known.", "Your district or farm location and the crop growth stage.", "What you see, when it started, how much of the field is affected, and any recent irrigation, rain or input application."],
+      source: "kvk", action: { label: "Browse farm tools", path: "/dashboard" },
+    },
+  },
+  hi: {
+    yellow: {
+      title: "पीली पत्तियों का कारण पहले खेत में जाँचें",
+      body: "पत्तियाँ पीली होने के कई कारण हो सकते हैं—पोषक तत्वों की कमी, अधिक या कम पानी, जड़ों की समस्या या रोग। किस उम्र की पत्तियाँ प्रभावित हैं और फसल की अवस्था क्या है, यह देखें।",
+      steps: ["देखें कि पहले पुरानी पत्तियाँ पीली हो रही हैं या नई, और पीलापन पूरे पौधे में है या धब्बों में।", "जड़ों के पास मिट्टी की नमी, रुका हुआ पानी, जड़ों की क्षति और पत्तियों के नीचे कीट देखें।", "कारण स्पष्ट होने तक अंदाज़े से यूरिया या अन्य खाद न डालें; पहले मिट्टी की जाँच कराएँ।"],
+      source: "soil", action: { label: "खाद संबंधी जानकारी", path: "/dashboard/fertilizer" },
+    },
+    pest: {
+      title: "कीट की पहचान और खेत की निगरानी से शुरू करें",
+      body: "उपाय फसल, कीट की प्रजाति, फसल की अवस्था और नुकसान के फैलाव पर निर्भर करता है। केवल लक्षण देखकर दवा चुनना सही नहीं है।",
+      steps: ["प्रभावित और स्वस्थ पौधों को देखें; पत्तियों के नीचे, तने और नई बढ़त पर कीट या अंडे जाँचें।", "फसल, अवस्था, प्रभावित क्षेत्र और दिख रहे कीट की जानकारी लिखें; साफ़ फोटो विशेषज्ञ को पहचानने में मदद करेगी।", "उपयुक्त जैविक और गैर-रासायनिक उपाय पहले देखें। दवा से पहले KVK या कृषि अधिकारी से फसल-विशेष सलाह लें और लेबल के निर्देश मानें।"],
+      source: "pest", action: { label: "पौधों के लक्षण देखें", path: "/dashboard/disease" },
+    },
+    disease: {
+      title: "लक्षणों से समस्या को समझने के लिए कुछ जानकारी दें",
+      body: "धब्बे, मुरझाना और सड़न कई कारणों से हो सकते हैं। केवल लिखे हुए संदेश से यह सहायक रोग की पुष्टि नहीं कर सकता।",
+      steps: ["फसल और अवस्था, लक्षण शुरू होने का समय और फैलाव दर्ज करें।", "प्रभावित तथा स्वस्थ पौधों की पत्तियाँ, तना और जड़ें देखें; हाल की बारिश, सिंचाई और छिड़काव नोट करें।", "पहचान से पहले फफूंदनाशक या दवाओं का मिश्रण न करें। साफ़ फोटो स्थानीय कृषि विशेषज्ञ या KVK को दिखाएँ।"],
+      source: "kvk", action: { label: "लक्षण जाँच खोलें", path: "/dashboard/disease" },
+    },
+    water: {
+      title: "सिंचाई बदलने से पहले जड़ क्षेत्र की नमी देखें",
+      body: "पानी की जरूरत फसल, अवस्था, मिट्टी, हाल की बारिश और खेत के मौसम पूर्वानुमान पर निर्भर करती है।",
+      steps: ["जड़ों के पास सतह से कुछ नीचे नमी देखें; केवल सूखी सतह का मतलब यह नहीं कि जड़ क्षेत्र भी सूखा है।", "पानी की कमी और जलभराव दोनों के संकेत देखें। जड़ों के पास पानी रुका हो तो निकास सुधारें।", "अगली सिंचाई की योजना फसल की अवस्था, मिट्टी और बारिश के पूर्वानुमान के अनुसार बनाएँ।"],
+      source: "weather", action: { label: "खेत का मौसम देखें", path: "/dashboard/weather" },
+    },
+    fertilizer: {
+      title: "खाद का निर्णय मिट्टी की जाँच पर आधारित करें",
+      body: "पोषक तत्वों की सही योजना फसल, मिट्टी की रिपोर्ट, लक्ष्य, फसल की अवस्था और पहले दी गई खाद पर निर्भर करती है।",
+      steps: ["मिट्टी की pH और उपलब्ध पोषक तत्वों की हाल की रिपोर्ट देखें।", "रिपोर्ट या स्थानीय कृषि विभाग की फसल-विशेष सलाह मानें।", "सिर्फ पत्तियों के रंग के आधार पर खाद न डालें; इससे खर्च और मिट्टी-पानी को नुकसान हो सकता है।"],
+      source: "soil", action: { label: "खाद मॉडल खोलें", path: "/dashboard/fertilizer" },
+    },
+    weather: {
+      title: "खेत के मौसम से काम की योजना बनाएँ",
+      body: "डैशबोर्ड का पूर्वानुमान निकटतम मौसम ग्रिड का है; खेत के अलग हिस्सों में स्थिति बदल सकती है।",
+      steps: ["सिंचाई या खेत का काम करने से पहले तारीख, बारिश की संभावना और अनुमानित वर्षा देखें।", "पूर्वानुमान की तुलना खेत में दिख रही स्थिति से करें, खासकर स्थानीय बारिश के बाद।", "फसल और निर्णय बताइए—जैसे सिंचाई, बुवाई या छिड़काव—ताकि सलाह अधिक उपयोगी हो।"],
+      source: "weather", action: { label: "7 दिन का मौसम देखें", path: "/dashboard/weather" },
+    },
+    crop: {
+      title: "मिट्टी और मौसम के अनुसार फसल चुनें",
+      body: "फसल की उपयुक्तता जिले, बुवाई के समय, मिट्टी, पानी और स्थानीय बाजार पर निर्भर करती है।",
+      steps: ["जहाँ उपलब्ध हो, मिट्टी की रिपोर्ट और स्थानीय फसल कैलेंडर देखें।", "पानी की उपलब्धता और मौसम के साथ फसल की अवधि पर विचार करें।", "मॉडल के परिणाम को बुवाई से पहले स्थानीय कृषि विशेषज्ञ से मिलाकर देखें।"],
+      source: "weather", action: { label: "फसल सुझाव खोलें", path: "/dashboard/crop" },
+    },
+    price: {
+      title: "बेचने का निर्णय लेने से पहले बाजार की तुलना करें",
+      body: "भाव मंडी, गुणवत्ता, तारीख, आवक और ढुलाई के खर्च से बदलते हैं। मॉडल का अनुमान पक्का बिक्री भाव नहीं है।",
+      steps: ["एक ही फसल और गुणवत्ता के लिए आसपास की मंडियों के हाल के भाव देखें।", "ढुलाई, भंडारण और कमीशन खर्च जोड़कर तुलना करें।", "KhetWise अनुमान को मौजूदा मंडी भाव के साथ एक अतिरिक्त जानकारी की तरह लें।"],
+      source: "kvk", action: { label: "बाजार मॉडल खोलें", path: "/dashboard/price" },
+    },
+    general: {
+      title: "मैं आम खेती की समस्या समझने में मदद कर सकता हूँ",
+      body: "सलाह आपके खेत के अनुसार देने के लिए कुछ जानकारी साझा करें।",
+      steps: ["फसल और किस्म, यदि पता हो।", "जिला या खेत का स्थान और फसल की अवस्था।", "क्या लक्षण दिख रहे हैं, कब शुरू हुए, कितना खेत प्रभावित है और हाल में सिंचाई, बारिश या खाद-दवा दी गई है या नहीं।"],
+      source: "kvk", action: { label: "खेती के टूल देखें", path: "/dashboard" },
+    },
+  },
+};
+
+const INTENTS = [
+  ["yellow", /\b(yellow|yellowing|pale leaves?)\b|पीली|पीले पत्ते|पत्ता पीला|पत्तियां पीली/iu],
+  ["pest", /\b(pest|insect|bug|aphid|worm|caterpillar|whitefly)\b|कीट|इल्ली|माहू|सफेद मक्खी|कीड़ा/iu],
+  ["disease", /\b(disease|fungus|fungal|spot|spots|wilt|rot|blight|mildew)\b|रोग|धब्बे|धब्बा|मुरझा|सड़न|फफूंद/iu],
+  ["water", /\b(irrigat|water|watering|drainage|dry spell)\w*\b|सिंचाई|पानी|जलभराव|नमी/iu],
+  ["fertilizer", /\b(fertilizer|fertiliser|manure|urea|nutrient|soil test)\w*\b|खाद|उर्वरक|मिट्टी की जांच|मिट्टी की जाँच|यूरिया/iu],
+  ["weather", /\b(weather|rain|rainfall|forecast|temperature|heat|cold)\w*\b|मौसम|बारिश|वर्षा|तापमान|गर्मी|ठंड/iu],
+  ["crop", /\b(which crop|crop recommendation|what to grow|sowing|planting)\b|कौन सी फसल|कौनसी फसल|फसल लगाऊं|क्या बोऊं|बुवाई/iu],
+  ["price", /\b(price|market|mandi|sell|selling)\b|भाव|कीमत|मंडी|बेचूं|बाजार/iu],
+];
+
+export function getFarmAdvice(message, language = "en") {
+  const text = String(message || "").trim();
+  const responseLanguage = /[\u0900-\u097f]/u.test(text) ? "hi" : language === "hi-IN" ? "hi" : "en";
+  const intent = INTENTS.find(([, pattern]) => pattern.test(text))?.[0] || "general";
+  const advice = ANSWERS[responseLanguage][intent];
+  return { ...advice, source: KNOWLEDGE_SOURCES[advice.source] };
+}
+
+export function getAssistantFarmContext() {
+  try {
+    const farm = JSON.parse(localStorage.getItem("khetwise_farm") || "null");
+    const cached = JSON.parse(localStorage.getItem("khetwise_forecast_cache") || "null");
+    const forecast = cached?.data;
+    const weatherIsRecent = cached?.savedAt && Date.now() - cached.savedAt < 24 * 60 * 60 * 1000;
+    const forecastMatchesFarm = farm?.location && cached?.location?.trim().toLowerCase() === farm.location.trim().toLowerCase();
+    return {
+      farmName: farm?.name || "",
+      location: farm?.location || "",
+      soilGuide: forecastMatchesFarm ? forecast?.soilGuide || null : null,
+      weather: weatherIsRecent && forecastMatchesFarm && forecast?.current ? {
+        location: forecast.location,
+        temperature: forecast.current.temperature_2m,
+        unit: forecast.unit,
+        description: forecast.current.description,
+        humidity: forecast.current.relative_humidity_2m,
+        rainChance: forecast.daily?.[0]?.precipitationProbability,
+      } : null,
+    };
+  } catch {
+    return { farmName: "", location: "", soilGuide: null, weather: null };
+  }
+}
