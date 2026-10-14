@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const dns = require("node:dns");
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
 const app = require("./app");
 const mongoose = require("mongoose");
 
@@ -12,9 +15,10 @@ mongoose
     console.log("Connected to MongoDB");
 
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`Server running on ${PORT}`);
     });
   })
   .catch((err) => {
     console.error("Database connection failed:", err);
+    console.dir(err, { depth: 8 });
   });

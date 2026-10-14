@@ -30,6 +30,9 @@ app.use("/api/crops", cropsRoutes);
 app.use("/api/alerts", AlertsRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/ml", mlRoutes);
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).end();
+});
 
 app.get("/", (req, res) => {
   res.send("KhetWise API is running");
