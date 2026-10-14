@@ -25,8 +25,10 @@ import heroImage from "../../assets/hero.png";
 // Node/Express on port 8080.
 //
 // FastAPI ML backend is separate and runs on port 8000.
-const AUTH_API_URL =
-  import.meta.env.VITE_AUTH_API_URL || "http://localhost:8080";
+const AUTH_API_URL = (
+  import.meta.env.VITE_AUTH_API_URL ||
+  "https://khet-wise.onrender.com"
+).replace(/\/+$/, "");
 
 
 // ============================================================
@@ -193,27 +195,20 @@ function Login() {
         replace: true,
       });
 
-    } catch (error) {
-      console.error("KhetWise login error:", error);
+    } 
+catch (error) {
+  if (
+    error instanceof TypeError &&
+    error.message.toLowerCase().includes("fetch")
+  ) {
+    setError(
+      "Unable to connect to KhetWise. Please check the backend URL, server status, and CORS settings."
+    );
+  } else {
+    setError(error.message || "Login failed. Please try again.");
+  }
+}
 
-      // Network/backend unavailable
-      if (
-        error instanceof TypeError &&
-        error.message.toLowerCase().includes("fetch")
-      ) {
-        setError(
-          "Unable to connect to KhetWise server. Please make sure the Node/Express backend is running on port 8080."
-        );
-      } else {
-        setError(
-          error.message ||
-            "Login failed. Please try again."
-        );
-      }
-
-    } finally {
-      setLoading(false);
-    }
   };
 
 
